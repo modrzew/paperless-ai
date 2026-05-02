@@ -1,107 +1,110 @@
 # paperless-ai
 
-Automated document categorization for Paperless-ngx using Claude AI via the Claude Code CLI.
+A thin CLI for Paperless-ngx, designed to be driven by Claude Code as an agent. Uses your Claude subscription (no API tokens billed).
 
-## What it does
+## What this is
 
-paperless-ai analyzes documents in your Paperless-ngx inbox and suggests appropriate metadata (titles, tags, correspondents, document types, and storage paths). It uses the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) to read OCR content and make intelligent categorization decisions based on your existing Paperless setup.
+A small Python CLI (`paperless-ai`) that wraps the Paperless-ngx REST API: list inbox docs, fetch OCR content, list/create tags and correspondents, update document metadata. There is no Python orchestrator and no "categorize" command — Claude is the orchestrator.
 
-By using Claude Code instead of the Claude API, you can process documents without paying per-token costs if you already have a Claude subscription (Pro or other paid plan). This makes it economical to categorize large batches of documents.
+The categorization workflow lives in `.claude/commands/categorize.md` as a Claude Code slash command. Run `claude` in this directory and type `/categorize` to invoke it. The slash command runs in your default model (Sonnet/Opus) but delegates per-document analysis to a Haiku subagent (`.claude/agents/categorize-doc.md`) via the Task tool, so the bulk of the token spend hits Haiku's rate-limit budget instead of Sonnet's. The orchestrator processes the inbox in batches of 3 docs per subagent invocation (configurable) and refreshes the correspondents list between batches so newly-created correspondents are reused instead of duplicated.
 
-## Purpose
+## Why this shape
 
-Manually categorizing documents in Paperless-ngx is time-consuming. This tool automates the process by:
+- **Subscription billing.** Claude Code uses your subscription, not the API. No per-token cost.
+- **CLI surface, not MCP.** Claude is good at running shell commands. A CLI is debuggable end to end (every command Claude runs, you can run too) and has zero new infrastructure.
+- **Prompt as code.** The categorization rules — semantic tag matching, correspondent normalization, dedup — live in `.claude/commands/categorize.md` and are version-controlled. Edit markdown to change behavior.
 
-- Analyzing document content using Claude AI via your existing subscription
-- Suggesting metadata based on your existing tags, correspondents, types, and storage paths
-- Learning your organizational patterns by matching against existing entities
-- Creating new correspondents when needed (with ML matching enabled)
-- Allowing review before applying changes
-- Avoiding API token costs by leveraging Claude Code
+## Install
 
-## How it works
-
-1. **Fetch documents**: Retrieves uncategorized documents from your Paperless-ngx inbox
-2. **Analyze content**: Sends OCR text to Claude AI along with your available metadata options
-3. **Generate suggestions**: Claude suggests appropriate categorizations, preferring existing entities
-4. **Review**: Displays suggestions in a formatted table for your review
-5. **Apply changes**: Optionally updates documents in Paperless-ngx and tags them as processed
-
-The tool preserves important workflows like the inbox tag and adds a `paperless-ai-parsed` tag to track which documents have been processed.
-
-## Installation
-
-Requires Python 3.13+. Install dependencies using uv:
+Requires Python 3.13+ and the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code).
 
 ```bash
 uv sync --dev
 ```
 
-## Configuration
+This installs the `paperless-ai` console script.
 
-Create a `.env` file or set environment variables:
+## Configure
 
 ```bash
-PAPERLESS_URL=http://your-paperless-instance
-PAPERLESS_API_TOKEN=your-api-token
-CLAUDE_COMMAND=claude  # Path to Claude CLI
-CLAUDE_TIMEOUT=120     # Timeout in seconds
+cp .env.example .env
+# edit PAPERLESS_URL and PAPERLESS_API_TOKEN
 ```
 
 ## Usage
 
-Test connection to Paperless:
+### Categorize the inbox
+
 ```bash
-python main.py test-connection
+cd /path/to/paperless-ai
+claude
 ```
 
-List documents in inbox:
-```bash
-python main.py list-inbox
+then in the Claude Code prompt:
+
+```
+/categorize
 ```
 
-Analyze documents and show suggestions:
-```bash
-python main.py analyze
+Pass arguments inline:
+
+```
+/categorize dry-run
+/categorize limit 5
+/categorize only bills, dry-run
 ```
 
-Analyze with review and apply:
+Claude will list the inbox, fetch each unprocessed document, decide on metadata, and apply changes via the CLI. An `AI parsed` tag is added to every doc Claude touches so subsequent runs skip it.
+
+### Manual primitives
+
+The CLI is also useful directly. All read commands support `--json`.
+
 ```bash
-python main.py analyze --apply
+paperless-ai test-connection
+paperless-ai list-inbox
+paperless-ai list-inbox --exclude-tag 12 --json
+paperless-ai get-doc 42 --include-content
+paperless-ai list-tags --json
+paperless-ai list-correspondents --json
+paperless-ai list-document-types --json
+paperless-ai list-storage-paths --json
+
+# Update metadata. --add-tag/--remove-tag use the server-side bulk_edit modify_tags
+# operation, so they don't disturb existing tags (including the inbox tag).
+paperless-ai update-doc 42 \
+  --title "ACME Electric — Q2 invoice" \
+  --type 3 --correspondent 7 --storage-path 4 \
+  --add-tag 11 --add-tag 19
+
+# Replace the full tag list (use sparingly — destructive)
+paperless-ai update-doc 42 --set-tags 11,19,23
+
+paperless-ai create-correspondent "Pacific Gas & Electric"
+paperless-ai create-tag "AI parsed"
 ```
 
-Process documents in batches:
-```bash
-python main.py analyze --limit 10 --apply
+## Project layout
+
 ```
-
-Analyze a specific document:
-```bash
-python main.py analyze --id 123
+main.py                       # Click CLI entry points
+config/settings.py            # Lazy env loader (pydantic-settings)
+paperless/
+  client.py                   # Paperless REST wrapper
+  models.py                   # pydantic models for API responses
+.claude/
+  commands/categorize.md      # The /categorize slash command (orchestrator)
+  agents/categorize-doc.md    # Haiku subagent for per-document analysis
+  settings.json               # Permissions allowlist for the paperless-ai CLI
 ```
-
-Export suggestions to JSON:
-```bash
-python main.py analyze --export suggestions.json
-```
-
-## Features
-
-- **Intelligent matching**: Claude tries to match existing entities before suggesting new ones
-- **Correspondent creation**: Suggests new correspondents when none match, with ML auto-matching enabled
-- **Batch processing**: Process documents incrementally with `--limit`
-- **Incremental workflow**: Already-processed documents are automatically excluded
-- **Inbox preservation**: Keeps inbox tags for manual review workflows
-- **JSON export**: Save suggestions for later review or automation
 
 ## Development
 
-Lint code:
 ```bash
 uv run ruff check .
-```
-
-Format code:
-```bash
 uv run ruff format .
 ```
+
+## Compatibility
+
+API client targets Paperless-ngx 2.20.x. Uses unversioned API (`Accept: application/json`), so it serves API version 1 by default — should remain compatible with older and newer Paperless versions within reason.
