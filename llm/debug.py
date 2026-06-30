@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from llm.base import AgentDebugTrace
+from llm.schemas import AgentDebugTrace
 from llm.usage import AgentUsageMetadata, extract_agent_usage
 
 
@@ -40,9 +40,10 @@ def print_agent_debug_traces(
         console.print("\n[dim]--- prompt ---[/dim]")
         console.print(trace.resolved_prompt or trace.prompt)
 
-        if trace.stdout:
+        raw_output = _raw_agent_response(trace)
+        if raw_output:
             console.print("\n[dim]--- output ---[/dim]")
-            console.print(trace.stdout)
+            console.print(raw_output)
 
 
 def format_usage_metadata(usage: AgentUsageMetadata) -> list[str]:
@@ -87,9 +88,7 @@ def _format_token_line(usage: AgentUsageMetadata) -> str | None:
         input_tokens = usage.input_tokens or 0
         output_tokens = usage.output_tokens or 0
         total = (
-            usage.total_tokens
-            if usage.total_tokens is not None
-            else input_tokens + output_tokens
+            usage.total_tokens if usage.total_tokens is not None else input_tokens + output_tokens
         )
         return f"tokens: {total:,} (input: {input_tokens:,}, output: {output_tokens:,})"
 
@@ -97,3 +96,9 @@ def _format_token_line(usage: AgentUsageMetadata) -> str | None:
         return f"tokens: {usage.total_tokens:,}"
 
     return None
+
+
+def _raw_agent_response(trace: AgentDebugTrace) -> str:
+    if trace.output_file_content and trace.output_file_content.strip():
+        return trace.output_file_content
+    return trace.stdout
