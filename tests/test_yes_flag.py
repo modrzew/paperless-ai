@@ -1,4 +1,4 @@
-"""Tests for non-interactive apply confirmation."""
+"""Tests for apply confirmation behavior."""
 
 from click.testing import CliRunner
 
@@ -11,6 +11,7 @@ def test_analyze_exposes_yes_flag():
     assert result.exit_code == 0
     assert "-y, --yes" in result.output
     assert "Automatically confirm apply-time prompts" in result.output
+    assert "--apply" not in result.output
 
 
 def test_confirm_or_yes_skips_prompt_when_yes_is_set():
