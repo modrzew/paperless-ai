@@ -113,11 +113,28 @@ def list_inbox(output):
     is_flag=True,
     help="Include all inbox documents, even if already parsed",
 )
-def analyze(doc_id, output, limit, export, batch_size, yes, debug, reprocess_stale, reprocess_all):
-    """Analyze inbox documents and suggest categorizations."""
+@click.option(
+    "--query",
+    help="Paperless query for targeted backfill (searches all documents, not inbox-only)",
+)
+def analyze(
+    doc_id,
+    output,
+    limit,
+    export,
+    batch_size,
+    yes,
+    debug,
+    reprocess_stale,
+    reprocess_all,
+    query,
+):
+    """Analyze documents and suggest categorizations."""
     try:
         if reprocess_stale and reprocess_all:
             raise click.UsageError("--reprocess-stale and --reprocess-all cannot be used together")
+        if doc_id and query:
+            raise click.UsageError("--id and --query cannot be used together")
 
         agent = CodexAgent(debug=debug)
         engine = CategorizationEngine(agent=agent)
@@ -126,6 +143,8 @@ def analyze(doc_id, output, limit, export, batch_size, yes, debug, reprocess_sta
         # Get documents to analyze
         if doc_id:
             documents = [client.get_document(doc_id)]
+        elif query:
+            documents = client.list_documents(query=query)
         else:
             # Exclude already-tracked documents unless explicitly reprocessing.
             excluded_tag_ids = []
@@ -155,8 +174,9 @@ def analyze(doc_id, output, limit, export, batch_size, yes, debug, reprocess_sta
                         version_field_id,
                     )
                 ]
-            if limit:
-                documents = documents[:limit]
+
+        if limit:
+            documents = documents[:limit]
 
         if not documents:
             console.print("[yellow]No documents to analyze[/yellow]")
