@@ -102,10 +102,6 @@ class Settings(BaseModel):
     paperless: PaperlessSettings
     codex: CodexSettings = Field(default_factory=CodexSettings)
     attachments: AttachmentSettings = Field(default_factory=AttachmentSettings)
-    protected_tags: list[str] = Field(
-        default_factory=lambda: ["Inbox"],
-        description="Tag names that should never be removed from documents",
-    )
     metadata_guidance: MetadataGuidance = Field(default_factory=MetadataGuidance)
     processing: ProcessingSettings = Field(default_factory=ProcessingSettings)
 
@@ -121,12 +117,6 @@ class Settings(BaseModel):
         if not v:
             return MetadataGuidance()
         return load_metadata_guidance_from_mapping(v, path=Path("metadata_guidance"))
-
-    @field_validator("protected_tags")
-    @classmethod
-    def normalize_protected_tags(cls, v: list[str]) -> list[str]:
-        """Normalize protected tag names loaded from the YAML list."""
-        return [item.strip() for item in v if item.strip()]
 
 
 def _load_config_file(path: Path) -> dict[str, Any]:
@@ -216,7 +206,6 @@ def load_settings(
             "(default: application/pdf, image/jpeg, image/png)",
             file=sys.stderr,
         )
-        print('  - protected_tags: tag name list (default: ["Inbox"])', file=sys.stderr)
         print(
             "  - metadata_guidance: tag, document type, and storage path guidance "
             "for agent choices",

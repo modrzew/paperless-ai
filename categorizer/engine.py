@@ -46,14 +46,10 @@ class CategorizationEngine:
     def __init__(
         self,
         agent: DocumentCategorizer,
-        protected_tag_names: list[str] | None = None,
     ):
         """Initialize the categorization engine."""
         self.paperless = PaperlessClient()
         self.agent = agent
-        self.protected_tag_names = (
-            protected_tag_names if protected_tag_names is not None else settings.protected_tags
-        )
         self._tags: list[Tag] | None = None
         self._correspondents: list[Correspondent] | None = None
         self._document_types: list[DocumentType] | None = None
@@ -126,8 +122,12 @@ class CategorizationEngine:
             self._custom_fields = self.paperless.list_custom_fields()
 
     def _get_protected_tag_ids(self) -> list[int]:
-        """Get IDs for configured protected tags that exist in Paperless."""
-        protected_names = {name.lower() for name in self.protected_tag_names}
+        """Get IDs for guided tags that can be added by the agent but not removed."""
+        protected_names = {
+            configured.name.lower()
+            for configured in self._tag_guidance_by_name.values()
+            if configured.entry.protected
+        }
         if not protected_names:
             return []
 
@@ -247,11 +247,12 @@ class CategorizationEngine:
             CategorizationSuggestion with the analysis results
 
         Note:
-            Protected tags configured in settings are ALWAYS preserved if present on the
-            document. They will not be passed as available tag options to the agent and
-            will be automatically included in suggested_tag_ids. Lifecycle tags managed by
-            paperless-ai itself are omitted from the agent context and applied only by the
-            engine.
+            Only guided tags are managed by the agent. Unguided tags are omitted from
+            the agent context and preserved if present on the document. Guided tags
+            marked protected remain available to the agent so they can be added, but
+            are also preserved when already present. Lifecycle tags managed by
+            paperless-ai itself are omitted from the agent context and applied only by
+            the engine.
         """
         # Load metadata if not already loaded
         self._load_metadata()
@@ -290,7 +291,7 @@ class CategorizationEngine:
 
         pending_new_correspondents = list(self.new_entities_found["correspondents"].keys())
         protected_tag_ids = self._get_protected_tag_ids()
-        omitted_tag_ids = set(protected_tag_ids) | set(engine_managed_tag_ids)
+        omitted_tag_ids = set(engine_managed_tag_ids)
 
         available_options = AvailableOptions(
             document_types=build_guided_options(
@@ -314,6 +315,9 @@ class CategorizationEngine:
         visible_tag_ids = set(available_options.tag_ids())
         current_visible_tag_ids = [
             tag_id for tag_id in current_user_tag_ids if tag_id in visible_tag_ids
+        ]
+        current_unmanaged_tag_ids = [
+            tag_id for tag_id in current_user_tag_ids if tag_id not in visible_tag_ids
         ]
 
         current_metadata = CurrentMetadata(
@@ -392,6 +396,10 @@ class CategorizationEngine:
             output.tag_ids,
             engine_managed_tag_ids,
         )
+
+        for unmanaged_tag_id in current_unmanaged_tag_ids:
+            if unmanaged_tag_id not in suggested_tag_ids:
+                suggested_tag_ids.append(unmanaged_tag_id)
 
         for protected_tag_id in protected_tag_ids:
             if protected_tag_id in document.tags and protected_tag_id not in suggested_tag_ids:
