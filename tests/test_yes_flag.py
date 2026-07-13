@@ -29,6 +29,22 @@ def test_analyze_exposes_query_option():
     assert "targeted backfill" in result.output
 
 
+def test_analyze_exposes_custom_field_query_option():
+    result = CliRunner().invoke(cli, ["analyze", "--help"])
+
+    assert result.exit_code == 0
+    assert "--custom-field-query" in result.output
+    assert "custom_field_query JSON expression" in result.output
+
+
+def test_analyze_does_not_expose_reprocess_options():
+    result = CliRunner().invoke(cli, ["analyze", "--help"])
+
+    assert result.exit_code == 0
+    assert "--reprocess-stale" not in result.output
+    assert "--reprocess-all" not in result.output
+
+
 def test_confirm_or_yes_skips_prompt_when_yes_is_set():
     prompts: list[str] = []
 

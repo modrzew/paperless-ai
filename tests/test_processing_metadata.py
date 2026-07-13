@@ -6,10 +6,7 @@ from categorizer.engine import CategorizationEngine, _format_token_metadata_json
 from config.settings import settings
 from llm.schemas import AgentCategorizationResult
 from llm.usage import AgentUsageMetadata
-from main import (
-    _apply_suggestions,
-    _should_analyze_for_stale_reprocessing,
-)
+from main import _apply_suggestions
 from paperless.models import (
     CategorizationSuggestion,
     CustomField,
@@ -214,22 +211,3 @@ def test_apply_tags_post_agent_failed_suggestions_with_processing_metadata():
             ],
         }
     ]
-
-
-def test_stale_reprocessing_filter_uses_version_field_only():
-    engine = CategorizationEngine(agent=StubAgent())
-    parsed_tag_id = 3
-    version_field_id = 10
-
-    unparsed = _make_document(tags=[])
-    current = _make_document(
-        tags=[parsed_tag_id],
-        custom_fields=[{"field": 10, "value": settings.processing.backfill_comparison_version}],
-    )
-    stale = _make_document(tags=[parsed_tag_id], custom_fields=[{"field": 10, "value": "0"}])
-
-    assert _should_analyze_for_stale_reprocessing(engine, unparsed, parsed_tag_id, version_field_id)
-    assert not _should_analyze_for_stale_reprocessing(
-        engine, current, parsed_tag_id, version_field_id
-    )
-    assert _should_analyze_for_stale_reprocessing(engine, stale, parsed_tag_id, version_field_id)

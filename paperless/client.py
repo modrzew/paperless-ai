@@ -246,20 +246,24 @@ class PaperlessClient:
         self,
         *,
         query: str | None = None,
+        custom_field_query: str | None = None,
         is_in_inbox: bool | None = None,
         exclude_tag_ids: Iterable[int] | None = None,
     ) -> list[Document]:
         """
-        List documents, optionally filtered by Paperless query syntax or inbox status.
+        List documents, optionally filtered by Paperless query syntax, custom fields, or inbox.
 
         Args:
             query: Paperless full-text query (e.g. "tag:Bill").
+            custom_field_query: Paperless custom_field_query JSON expression.
             is_in_inbox: When set, restrict to inbox/non-inbox documents.
             exclude_tag_ids: Optional tag IDs to exclude from results.
         """
         params: dict[str, str] = {}
         if query:
             params["query"] = query
+        if custom_field_query:
+            params["custom_field_query"] = custom_field_query
         if is_in_inbox is not None:
             params["is_in_inbox"] = "true" if is_in_inbox else "false"
 

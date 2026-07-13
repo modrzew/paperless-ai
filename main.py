@@ -104,18 +104,12 @@ def list_inbox(output):
 )
 @click.option("--debug", is_flag=True, help="Print agent inputs and outputs for inspection")
 @click.option(
-    "--reprocess-stale",
-    is_flag=True,
-    help="Include parsed inbox documents whose paperless-ai version differs from config",
-)
-@click.option(
-    "--reprocess-all",
-    is_flag=True,
-    help="Include all inbox documents, even if already parsed",
-)
-@click.option(
     "--query",
     help="Paperless query for targeted backfill (searches all documents, not inbox-only)",
+)
+@click.option(
+    "--custom-field-query",
+    help="Paperless custom_field_query JSON expression for targeted backfill",
 )
 def analyze(
     doc_id,
@@ -125,16 +119,13 @@ def analyze(
     batch_size,
     yes,
     debug,
-    reprocess_stale,
-    reprocess_all,
     query,
+    custom_field_query,
 ):
     """Analyze documents and suggest categorizations."""
     try:
-        if reprocess_stale and reprocess_all:
-            raise click.UsageError("--reprocess-stale and --reprocess-all cannot be used together")
-        if doc_id and query:
-            raise click.UsageError("--id and --query cannot be used together")
+        if doc_id and (query or custom_field_query):
+            raise click.UsageError("--id cannot be used with --query or --custom-field-query")
 
         agent = CodexAgent(debug=debug)
         engine = CategorizationEngine(agent=agent)
@@ -143,37 +134,24 @@ def analyze(
         # Get documents to analyze
         if doc_id:
             documents = [client.get_document(doc_id)]
-        elif query:
-            documents = client.list_documents(query=query)
+        elif query or custom_field_query:
+            documents = client.list_documents(
+                query=query,
+                custom_field_query=custom_field_query,
+            )
         else:
-            # Exclude already-tracked documents unless explicitly reprocessing.
+            # Exclude already-tracked documents in normal inbox processing.
             excluded_tag_ids = []
-            parsed_tag_id = None
             try:
                 # Check if tracking tags exist, but don't create them yet.
                 for tag_name in (PARSED_TAG_NAME, FAILED_TAG_NAME):
                     tag_id = engine.get_tag_id_by_name(tag_name)
                     if tag_id is not None:
-                        if tag_name == PARSED_TAG_NAME:
-                            parsed_tag_id = tag_id
-                        if not (reprocess_stale or reprocess_all):
-                            excluded_tag_ids.append(tag_id)
+                        excluded_tag_ids.append(tag_id)
             except Exception:
                 pass  # If we can't check, continue without filtering
 
             documents = client.list_inbox_documents(exclude_tag_ids=excluded_tag_ids)
-            if reprocess_stale:
-                version_field_id = engine.get_processing_version_custom_field_id()
-                documents = [
-                    doc
-                    for doc in documents
-                    if _should_analyze_for_stale_reprocessing(
-                        engine,
-                        doc,
-                        parsed_tag_id,
-                        version_field_id,
-                    )
-                ]
 
         if limit:
             documents = documents[:limit]
@@ -479,25 +457,6 @@ def _display_suggestion(suggestion, output_console=console):
         output_console.print(
             "  [yellow]⚠️  New correspondent will be created during review[/yellow]"
         )
-
-
-def _should_analyze_for_stale_reprocessing(
-    engine: CategorizationEngine,
-    document,
-    parsed_tag_id: int | None,
-    version_field_id: int | None,
-) -> bool:
-    """Return whether a document should be analyzed under --reprocess-stale."""
-    if parsed_tag_id is None or parsed_tag_id not in document.tags:
-        return True
-    return engine.is_document_processing_stale(document, version_field_id)
-
-
-def _exclude_documents_with_tag(documents, tag_id: int | None):
-    """Return documents excluding any document with the given tag id."""
-    if tag_id is None:
-        return documents
-    return [doc for doc in documents if tag_id not in doc.tags]
 
 
 if __name__ == "__main__":

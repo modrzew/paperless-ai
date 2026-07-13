@@ -157,6 +157,36 @@ def test_list_documents_passes_query_to_api():
     assert client.captured_params == [{"query": "tag:Bill"}]
 
 
+def test_list_documents_passes_custom_field_query_to_api():
+    client = ListingPaperlessClient()
+
+    documents = client.list_documents(
+        custom_field_query='["paperless-ai-version","exact","v2"]',
+    )
+
+    assert documents == []
+    assert client.captured_params == [
+        {"custom_field_query": '["paperless-ai-version","exact","v2"]'}
+    ]
+
+
+def test_list_documents_can_combine_query_and_custom_field_query():
+    client = ListingPaperlessClient()
+
+    documents = client.list_documents(
+        query="tag:Inbox",
+        custom_field_query='["paperless-ai-version","exact","v2"]',
+    )
+
+    assert documents == []
+    assert client.captured_params == [
+        {
+            "query": "tag:Inbox",
+            "custom_field_query": '["paperless-ai-version","exact","v2"]',
+        }
+    ]
+
+
 def test_list_inbox_documents_excludes_any_requested_tag():
     client = ListingPaperlessClient()
 

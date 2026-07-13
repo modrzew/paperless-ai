@@ -3,7 +3,6 @@
 import json
 import os
 from pathlib import Path
-from typing import Any
 
 from config.metadata_guidance import (
     build_guided_options,
@@ -201,10 +200,6 @@ class CategorizationEngine:
         """Return IDs for paperless-ai processing custom fields, creating missing ones."""
         return self._processing_custom_field_ids(create=True)
 
-    def get_processing_version_custom_field_id(self) -> int | None:
-        """Return the backfill comparison marker custom field ID if it exists."""
-        return self._processing_custom_field_ids(create=False).get("version")
-
     def processing_metadata_for_result(
         self,
         result: AgentCategorizationResult,
@@ -235,22 +230,6 @@ class CategorizationEngine:
         if metadata.tokens:
             values.append({"field": field_ids["tokens"], "value": metadata.tokens})
         return values
-
-    def is_document_processing_stale(
-        self,
-        document: Document,
-        version_field_id: int | None = None,
-    ) -> bool:
-        """Return whether a document's stored backfill comparison marker differs from config."""
-        field_id = version_field_id
-        if field_id is None:
-            field_id = self.get_processing_version_custom_field_id()
-        if field_id is None:
-            return True
-        return (
-            _document_custom_field_value(document.custom_fields, field_id)
-            != settings.processing.backfill_comparison_version
-        )
 
     def categorize_document(self, document: Document) -> CategorizationSuggestion:
         """
@@ -654,23 +633,3 @@ def _format_token_metadata_json(usage) -> str | None:
     if not tokens:
         return None
     return json.dumps(tokens, separators=(",", ":"))
-
-
-def _document_custom_field_value(
-    custom_fields: list[dict[str, Any]] | dict[str, Any],
-    field_id: int,
-) -> Any:
-    """Extract a Paperless document custom field value from common API shapes."""
-    field_id_string = str(field_id)
-    if isinstance(custom_fields, dict):
-        return custom_fields.get(field_id_string, custom_fields.get(field_id))
-
-    for item in custom_fields:
-        item_field_id = item.get("field")
-        if isinstance(item_field_id, dict):
-            item_field_id = item_field_id.get("id")
-        if item_field_id is None:
-            item_field_id = item.get("id")
-        if str(item_field_id) == field_id_string:
-            return item.get("value")
-    return None

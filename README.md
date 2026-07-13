@@ -151,14 +151,14 @@ Analyze a specific document:
 python main.py analyze --id 123
 ```
 
-Reprocess inbox documents whose stored paperless-ai backfill comparison version differs from config:
+Backfill documents by stored paperless-ai processing version:
 ```bash
-python main.py analyze --reprocess-stale
+python main.py analyze --custom-field-query '["paperless-ai-version","exact","1"]'
 ```
 
-Reprocess all inbox documents, including documents already marked parsed:
+Backfill documents matching both normal Paperless search and a custom-field filter:
 ```bash
-python main.py analyze --reprocess-all
+python main.py analyze --query "tag:Bill" --custom-field-query '["paperless-ai-version","exact","1"]'
 ```
 
 Inspect raw agent input and output:
@@ -179,7 +179,7 @@ python main.py analyze --export suggestions.json
 - **LLM OCR content**: Optionally applies Codex-produced replacement document content
 - **Batch processing**: Process documents incrementally with `--limit`
 - **Incremental workflow**: Already-processed documents are automatically excluded
-- **Backfill workflow**: Reprocess parsed documents whose stored backfill comparison version differs from config, or target documents with a Paperless query
+- **Backfill workflow**: Target documents with Paperless queries and custom-field queries
 - **Processing metadata**: Writes model, backfill comparison marker, and token JSON to Paperless custom fields
 - **Processing delay**: Optionally delay between document analyses with `processing.delay_between_documents_seconds`
 - **Protected tag preservation**: Keeps `protected: true` guided tags for manual review workflows

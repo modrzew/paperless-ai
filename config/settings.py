@@ -87,10 +87,7 @@ class ProcessingSettings(BaseModel):
     )
     backfill_comparison_version: str = Field(
         default="1",
-        description=(
-            "Marker stored on processed documents and compared by --reprocess-stale "
-            "to decide which documents need backfilling"
-        ),
+        description=("Marker stored on processed documents for custom-field query backfills"),
     )
 
 
@@ -217,8 +214,8 @@ def load_settings(
             file=sys.stderr,
         )
         print(
-            "  - processing.backfill_comparison_version: marker compared by "
-            '--reprocess-stale (default: "1")',
+            "  - processing.backfill_comparison_version: marker stored for "
+            'custom-field query backfills (default: "1")',
             file=sys.stderr,
         )
         sys.exit(1)
